@@ -1,0 +1,102 @@
+name: Deploy SpecReel
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './backend/package-lock.json'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run security audit
+      run: npm audit --audit-level moderate
+    
+    - name: Check for linting issues
+      run: |
+        if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ]; then
+          npx eslint .
+        else
+          echo "No ESLint config found"
+        fi
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './frontend/package-lock.json'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: |
+        if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ]; then
+          npx eslint . --max-warnings=0
+        else
+          echo "No ESLint config found"
+        fi
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Check build output
+      run: |
+        ls -la dist/
+        echo "Build completed successfully!"
+
+  deploy-backend:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Trigger Render Deployment
+      run: |
+        echo "🚀 Backend deployment triggered on Render"
+        echo "Render automatically deploys on git push to main"
+        
+    - name: Verify Backend Health
+      run: |
+        sleep 30  # Wait for deployment
+        curl -f https://specreel-backend.onrender.com/api/health || exit 1
+
+  deploy-frontend:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Trigger Vercel Deployment
+      run: |
+        echo "🎨 Frontend deployment triggered on Vercel"
+        echo "Vercel automatically deploys on git push to main"
