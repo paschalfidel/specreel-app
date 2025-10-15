@@ -1,4 +1,3 @@
-// src/controllers/movieController.js
 import { searchMovies, getMovieDetails, discoverMovies } from '../services/tmdb.js';
 import { recommendForUser } from '../services/recommender.js';
 
@@ -12,6 +11,8 @@ export const search = async (req, res, next) => {
   if (rating_gte) params['vote_average.gte'] = rating_gte;
   
   try {
+    console.log('🎬 Movie search request:', { q, page, params });
+    
     let data;
     if (q) {
       data = await searchMovies(q, page, params);
@@ -27,9 +28,18 @@ export const search = async (req, res, next) => {
       total_results: data.total_results || 0
     });
   } catch (err) {
-    console.error('Search error:', err);
+    console.error('❌ Search error:', err);
+    
+    // Check if it's a TMDB API error
+    if (err.response?.status === 401) {
+      return res.status(500).json({ 
+        message: 'TMDB API configuration error. Please check API key.',
+        error: 'Invalid TMDB API key'
+      });
+    }
+    
     return res.status(500).json({ 
-      message: 'Failed to fetch movies',
+      message: 'Failed to fetch movies from TMDB',
       error: err.message 
     });
   }
@@ -44,6 +54,8 @@ export const details = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid movie ID' });
     }
     
+    console.log('🎬 Fetching movie details for ID:', id);
+    
     const data = await getMovieDetails(id);
     
     if (!data) {
@@ -52,10 +64,17 @@ export const details = async (req, res, next) => {
     
     return res.json(data);
   } catch (err) {
-    console.error('Details error:', err);
+    console.error('❌ Details error:', err);
     
     if (err.response?.status === 404) {
       return res.status(404).json({ message: 'Movie not found' });
+    }
+    
+    if (err.response?.status === 401) {
+      return res.status(500).json({ 
+        message: 'TMDB API configuration error',
+        error: 'Invalid API key or configuration'
+      });
     }
     
     return res.status(500).json({ 
@@ -78,7 +97,7 @@ export const recommendations = async (req, res, next) => {
       message: recs.length === 0 ? 'No recommendations available yet. Rate more movies!' : ''
     });
   } catch (err) {
-    console.error('Recommendations error:', err);
+    console.error('❌ Recommendations error:', err);
     return res.status(500).json({ 
       message: 'Failed to get recommendations',
       error: err.message 

@@ -17,7 +17,9 @@ const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'TMDB_API_KEY'];
 requiredEnvVars.forEach(envVar => {
   if (!process.env[envVar]) {
     console.error(`❌ Missing required environment variable: ${envVar}`);
-    process.exit(1);
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`Please set ${envVar} in your Render environment variables`);
+    }
   }
 });
 
@@ -29,12 +31,22 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Add this for form data
 app.use(cors({ 
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', 
+  origin: [
+    'http://localhost:5173',
+    'https://specreel-app.vercel.app',
+    'https://specreel-app.vercel.app'
+  ],
   credentials: true 
 }));
 
 // Passport middleware 
 app.use(passport.initialize());
+
+//Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -45,11 +57,15 @@ app.use('/api/ratings', ratingRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose && mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+
   res.json({ 
     status: 'OK', 
     message: 'SpecReel Server is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    database: dbStatus,
+    version: '1.0.0'
   });
 });
 
@@ -64,7 +80,8 @@ app.get('/', (req, res) => {
       users: '/api/users', 
       movies: '/api/movies',
       reviews: '/api/reviews'
-    }
+    },
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -87,7 +104,7 @@ app.listen(PORT, () => {
 🚀 SpecReel Server Started!
 📍 Port: ${PORT}
 🌍 Environment: ${process.env.NODE_ENV || 'development'}
-📊 Health: http://localhost:${PORT}/api/health
+📊 Health: https://specreel-app.onrender.com/api/health
   `);
 });
 

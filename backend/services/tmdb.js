@@ -3,63 +3,93 @@ import redis from '../config/redis.js';
 
 const TMDB_URL = 'https://api.themoviedb.org/3';
 
+// Check if TMDB API key is configured
+if (!process.env.TMDB_API_KEY) {
+  console.error('❌ TMDB_API_KEY is not set in environment variables');
+}
+
+const tmdbApi = axios.create({
+  baseURL: TMDB_URL,
+  timeout: 10000,
+  params: {
+    api_key: process.env.TMDB_API_KEY
+  }
+});
+
 export const fetchTrendingMovies = async () => {
-  const cacheKey = 'tmdb:trending';
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  try {
+    const cacheKey = 'tmdb:trending';
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
 
-  const { data } = await axios.get(`${TMDB_URL}/trending/movie/week`, {
-    params: { api_key: process.env.TMDB_API_KEY },
-  });
-
-  await redis.setex(cacheKey, 3600, JSON.stringify(data.results));
-  return data.results;
+    const { data } = await tmdbApi.get('/trending/movie/week');
+    
+    await redis.setex(cacheKey, 3600, JSON.stringify(data.results));
+    return data.results;
+  } catch (error) {
+    console.error('❌ TMDB Trending error:', error.response?.data || error.message);
+    throw error;
+  }
 };
 
 export const getMovieDetails = async (id) => {
-  const cacheKey = `tmdb:movie:${id}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  try {
+    const cacheKey = `tmdb:movie:${id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
 
-  const { data } = await axios.get(`${TMDB_URL}/movie/${id}`, {
-    params: { api_key: process.env.TMDB_API_KEY },
-  });
+    const { data } = await tmdbApi.get(`/movie/${id}`, {
+      params: {
+        append_to_response: 'credits,videos,similar'
+      }
+    });
 
-  await redis.setex(cacheKey, 3600, JSON.stringify(data));
-  return data;
+    await redis.setex(cacheKey, 3600, JSON.stringify(data));
+    return data;
+  } catch (error) {
+    console.error(`❌ TMDB Details error for movie ${id}:`, error.response?.data || error.message);
+    throw error;
+  }
 };
 
 export const searchMovies = async (query, page = 1, additionalParams = {}) => {
-  const cacheKey = `tmdb:search:${query}:${page}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  try {
+    const cacheKey = `tmdb:search:${query}:${page}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
 
-  const { data } = await axios.get(`${TMDB_URL}/search/movie`, {
-    params: { 
-      api_key: process.env.TMDB_API_KEY,
-      query,
-      page,
-      ...additionalParams
-    },
-  });
+    const { data } = await tmdbApi.get('/search/movie', {
+      params: { 
+        query,
+        page,
+        ...additionalParams
+      },
+    });
 
-  await redis.setex(cacheKey, 3600, JSON.stringify(data));
-  return data;
+    await redis.setex(cacheKey, 3600, JSON.stringify(data));
+    return data;
+  } catch (error) {
+    console.error('❌ TMDB Search error:', error.response?.data || error.message);
+    throw error;
+  }
 };
 
 export const discoverMovies = async (params = {}) => {
-  const cacheKey = `tmdb:discover:${JSON.stringify(params)}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  try {
+    const cacheKey = `tmdb:discover:${JSON.stringify(params)}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
 
-  const { data } = await axios.get(`${TMDB_URL}/discover/movie`, {
-    params: {
-      api_key: process.env.TMDB_API_KEY,
-      ...params
-    },
-  });
+    const { data } = await tmdbApi.get('/discover/movie', {
+      params: {
+        ...params
+      },
+    });
 
-  await redis.setex(cacheKey, 3600, JSON.stringify(data));
-  return data;
+    await redis.setex(cacheKey, 3600, JSON.stringify(data));
+    return data;
+  } catch (error) {
+    console.error('❌ TMDB Discover error:', error.response?.data || error.message);
+    throw error;
+  }
 };
-
