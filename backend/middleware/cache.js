@@ -1,16 +1,17 @@
-// src/middleware/cache.js
-import redis from '../config/redis.js'; // default export should be an ioredis client
+import redis, { isRedisAvailable } from '../config/redis.js';
 
 /**
  * cacheMiddleware(prefix, ttlSeconds)
- * - prefix: string used for key namespace (e.g. 'movies', 'recs')
- * - ttlSeconds: time-to-live in seconds (default 3600 = 1 hour)
- *
- * Usage:
- *   router.get('/popular', cacheMiddleware('movies', 3600), controller.getPopular)
+ * - Works with or without Redis
+ * - Without Redis, it just passes through requests
  */
 export const cacheMiddleware = (prefix = 'cache', ttlSeconds = 3600) => {
   return async (req, res, next) => {
+    // If Redis is not available, skip caching entirely
+    if (!isRedisAvailable()) {
+      return next();
+    }
+
     try {
       const key = `${prefix}:${req.method}:${req.originalUrl}`;
       const cached = await redis.get(key);
@@ -19,7 +20,6 @@ export const cacheMiddleware = (prefix = 'cache', ttlSeconds = 3600) => {
         res.setHeader('X-Cache', 'HIT');
         return res.json(JSON.parse(cached));
       }
-      
 
       // Wrap res.json so we can cache the response body
       const originalJson = res.json.bind(res);
@@ -39,7 +39,7 @@ export const cacheMiddleware = (prefix = 'cache', ttlSeconds = 3600) => {
 
       return next();
     } catch (err) {
-      // If redis is down, continue without caching
+      // If redis fails, continue without caching
       console.error('Cache middleware error:', err);
       return next();
     }
